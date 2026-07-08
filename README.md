@@ -143,15 +143,25 @@ If you prefer to configure every component manually, follow these steps:
    - Takes 30 seconds to 5 minutes depending on transaction count
 4. **Review Results** in tabs:
    - **Executive Summary** — AI-generated narrative
-   - **Verdicts** — Per-account risk scores with ML + LLM reasoning
-   - **Graph** — Interactive Cytoscape.js network visualization
+   - **Verdicts** — Per-account risk scores with ML + LLM reasoning (click any account ID to open the **Suspect Profile Deep-Dive**)
+   - **Graph** — Interactive case-level Cytoscape.js network visualization
    - **Alerts** — Flagged transactions with evidence
    - **Transactions** — Full transaction table with filters
    - **Money Trail** — FIFO-traced fund flows
    - **Entities** — Extracted PANs, UPIs, phone numbers, IFSCs
    - **Hypothesis** — AI-driven hypothesis engine
    - **Ask AI** — Natural language query over case data
-   - **Reports** — Generate PDF/Word officer briefs
+   - **Reports** — Generate PDF/Word officer briefs or download the suspect dossier
+
+5. **Suspect Profile & Deep Investigation**
+   Clicking on any account ID opens a dedicated profile workspace containing:
+   - **Composite Risk Attribution**: Dynamic breakdown of the suspect's risk score (ML Anomaly, Taint Propagation, Network Centrality, Watchlist, Rule Flags).
+   - **Identity Resolution**: Extracted identifiers (PANs, Phone Numbers, UPI IDs) automatically mined from statement records.
+   - **Interactive Localized Neighborhood Network**: A zoomable, searchable Cytoscape.js neighborhood map of the suspect's money flow with node pulsing.
+   - **Linked Accounts**: Lists other accounts resolved to this identity across the case statements, along with match confidence.
+   - **AI Suspect Assistant**: A localized, context-aware chatbot to query specific transaction trails, summarizing their role in the case.
+   - **Timeline & CUSUM Balance Chart**: Running balance graphs showing transactions over time.
+   - **Sankey Flow / Pattern Insights**: Interactive flow mapping showing fund distribution trends.
 
 ---
 
