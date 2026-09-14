@@ -355,7 +355,7 @@ from ml.model_loader import load_isolation_forest, load_lgbm_weak
 print('IF:', load_isolation_forest())
 print('LGBM:', load_lgbm_weak())
 "
-```
+
 
 ### Test the API directly
 ```bash
@@ -366,9 +366,6 @@ curl -sk https://localhost:3000/api/health
 curl -sk -X POST https://localhost:3000/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"YOUR_PASSWORD"}'
-```
-
----
 
 ## Architecture Deep-Dive
 
