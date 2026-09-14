@@ -31,12 +31,15 @@ export default function VerdictsPanel({ caseId }) {
   const [verdicts, setVerdicts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [runningOpinion, setRunningOpinion] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [tierFilter, setTierFilter] = useState('ALL');
+  const [copiedId, setCopiedId] = useState(null);
 
   const loadVerdicts = async () => {
     try {
       setLoading(true);
       const r = await apiClient.get(`/cases/${caseId}/verdicts`);
-      setVerdicts(r.data);
+      setVerdicts(r.data || []);
     } catch (e) {
       console.error('Failed to load verdicts:', e);
     } finally {
@@ -60,6 +63,56 @@ export default function VerdictsPanel({ caseId }) {
     }
   };
 
+  const copyToClipboard = (text, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedId(text);
+      setTimeout(() => setCopiedId(null), 1800);
+    }
+  };
+
+  // Filter & Search Calculations
+  const counts = {
+    all: verdicts.length,
+    high: verdicts.filter(v => v.algo_verdict === 'HIGH' || v.agreement_tier === 'CROSS_VALIDATED_HIGH' || (v.composite_score >= 70)).length,
+    medium: verdicts.filter(v => v.algo_verdict === 'MEDIUM' || v.agreement_tier?.includes('DIVERGENT') || (v.composite_score >= 40 && v.composite_score < 70)).length,
+    clear: verdicts.filter(v => v.algo_verdict === 'CLEAR' || v.agreement_tier === 'CROSS_VALIDATED_CLEAR' || (v.composite_score < 40)).length,
+    audited: verdicts.filter(v => v.llm_verdict && v.llm_verdict !== 'NOT_REVIEWED').length,
+  };
+
+  const filteredVerdicts = verdicts.filter((v) => {
+    // 1. Tier / Risk filter
+    if (tierFilter === 'HIGH') {
+      const isHigh = v.algo_verdict === 'HIGH' || v.agreement_tier === 'CROSS_VALIDATED_HIGH' || (v.composite_score >= 70);
+      if (!isHigh) return false;
+    } else if (tierFilter === 'MEDIUM') {
+      const isMed = v.algo_verdict === 'MEDIUM' || v.agreement_tier?.includes('DIVERGENT') || (v.composite_score >= 40 && v.composite_score < 70);
+      if (!isMed) return false;
+    } else if (tierFilter === 'CLEAR') {
+      const isClear = v.algo_verdict === 'CLEAR' || v.agreement_tier === 'CROSS_VALIDATED_CLEAR' || (v.composite_score < 40);
+      if (!isClear) return false;
+    } else if (tierFilter === 'AUDITED') {
+      if (!v.llm_verdict || v.llm_verdict === 'NOT_REVIEWED') return false;
+    }
+
+    // 2. Text Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = (v.account_holder || '').toLowerCase().includes(q);
+      const matchAcc = (v.account_id || '').toLowerCase().includes(q);
+      const matchBank = (v.bank_name || '').toLowerCase().includes(q);
+      const matchRole = (v.role_label || '').toLowerCase().includes(q);
+      const matchTier = (v.tier_label || '').toLowerCase().includes(q);
+      const matchAlgo = (v.algo_verdict || '').toLowerCase().includes(q);
+      const matchLlm = (v.llm_verdict || '').toLowerCase().includes(q);
+      return matchName || matchAcc || matchBank || matchRole || matchTier || matchAlgo || matchLlm;
+    }
+
+    return true;
+  });
+
   if (loading && verdicts.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -71,6 +124,7 @@ export default function VerdictsPanel({ caseId }) {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div>
           <h2 className="text-base font-bold text-ink-primary">Suspect & Verdict Profiles</h2>
@@ -80,16 +134,120 @@ export default function VerdictsPanel({ caseId }) {
         </div>
         <button
           onClick={loadVerdicts}
-          className="text-xs border border-border bg-surface-raised hover:bg-surface-sunken text-ink-secondary px-3 py-1.5 rounded-md font-semibold transition-colors"
+          className="text-xs border border-border bg-surface-raised hover:bg-surface-sunken text-ink-secondary px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5"
         >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
           Refresh
         </button>
       </div>
 
+      {/* Search & Filter Toolbar */}
+      {verdicts.length > 0 && (
+        <div className="bg-surface-raised border border-border-hairline rounded-xl p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-card">
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[220px]">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-ink-muted">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search suspect name, account ID, bank, role..."
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-surface-sunken/60 border border-border rounded-lg text-ink-primary placeholder-ink-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-ink-muted hover:text-ink-primary text-xs"
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Quick Filter Pills */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setTierFilter('ALL')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                tierFilter === 'ALL'
+                  ? 'bg-accent text-accent-fg font-semibold'
+                  : 'bg-surface-sunken text-ink-secondary hover:text-ink-primary border border-border-hairline'
+              }`}
+            >
+              All <span className="opacity-75 text-[10px]">({counts.all})</span>
+            </button>
+            <button
+              onClick={() => setTierFilter('HIGH')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                tierFilter === 'HIGH'
+                  ? 'bg-risk-high text-white font-semibold'
+                  : 'bg-risk-high-bg text-risk-high hover:opacity-90 border border-risk-high/20'
+              }`}
+            >
+              High Risk <span className="opacity-75 text-[10px]">({counts.high})</span>
+            </button>
+            <button
+              onClick={() => setTierFilter('MEDIUM')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                tierFilter === 'MEDIUM'
+                  ? 'bg-risk-medium text-white font-semibold'
+                  : 'bg-risk-medium-bg text-risk-medium hover:opacity-90 border border-risk-medium/20'
+              }`}
+            >
+              Medium Risk <span className="opacity-75 text-[10px]">({counts.medium})</span>
+            </button>
+            <button
+              onClick={() => setTierFilter('CLEAR')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                tierFilter === 'CLEAR'
+                  ? 'bg-emerald-600 text-white font-semibold'
+                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:opacity-90 border border-emerald-500/20'
+              }`}
+            >
+              Clear / Low <span className="opacity-75 text-[10px]">({counts.clear})</span>
+            </button>
+            <button
+              onClick={() => setTierFilter('AUDITED')}
+              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                tierFilter === 'AUDITED'
+                  ? 'bg-accent text-accent-fg font-semibold'
+                  : 'bg-accent-subtle text-accent hover:opacity-90 border border-accent/20'
+              }`}
+            >
+              Audited <span className="opacity-75 text-[10px]">({counts.audited})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Results summary if filtered */}
+      {(searchQuery || tierFilter !== 'ALL') && verdicts.length > 0 && (
+        <div className="flex items-center justify-between text-xs text-ink-muted px-1">
+          <span>
+            Showing <strong className="text-ink-primary">{filteredVerdicts.length}</strong> of {verdicts.length} suspect accounts
+          </span>
+          <button
+            onClick={() => { setSearchQuery(''); setTierFilter('ALL'); }}
+            className="text-accent hover:underline text-xs font-semibold"
+          >
+            Reset Filters
+          </button>
+        </div>
+      )}
+
+      {/* Suspect Cards Grid */}
       <div className="grid grid-cols-1 gap-6">
-        {verdicts.map((v) => {
+        {filteredVerdicts.map((v) => {
           const breakdown = v.score_breakdown || {};
-          const isLlmReviewed = v.llm_verdict !== 'NOT_REVIEWED';
+          const isLlmReviewed = Boolean(v.llm_verdict && v.llm_verdict !== 'NOT_REVIEWED');
+          const isCopied = copiedId === v.account_id;
 
           return (
             <div
@@ -104,21 +262,40 @@ export default function VerdictsPanel({ caseId }) {
                       {v.account_holder || 'Unnamed Suspect'}
                     </span>
                     <span className="text-xs text-ink-muted">|</span>
-                    <Link
-                      to={`/cases/${caseId}/suspects/${v.account_id}`}
-                      className="font-mono text-xs font-semibold text-accent hover:text-accent-hover hover:underline transition-colors bg-accent/5 px-2 py-0.5 rounded border border-accent/15"
-                    >
-                      {v.account_id}
-                    </Link>
+                    
+                    {/* Account ID with Copy Button */}
+                    <div className="inline-flex items-center gap-1 bg-accent/5 px-2 py-0.5 rounded border border-accent/15">
+                      <Link
+                        to={`/cases/${caseId}/suspects/${v.account_id}`}
+                        className="font-mono text-xs font-semibold text-accent hover:text-accent-hover hover:underline transition-colors"
+                      >
+                        {v.account_id}
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={(e) => copyToClipboard(v.account_id, e)}
+                        title={isCopied ? "Copied to clipboard!" : "Copy account number"}
+                        className="text-ink-muted hover:text-accent p-0.5 rounded transition-colors"
+                      >
+                        {isCopied ? (
+                          <span className="text-[10px] font-bold text-emerald-500">✓</span>
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+
                     <span className={`text-[9px] font-extrabold tracking-wider px-2 py-0.5 rounded-full uppercase ${TIER_COLORS[v.agreement_tier] || 'bg-surface-sunken text-ink-secondary border border-border-hairline'}`}>
-                      {v.agreement_tier.replace(/_/g, ' ')}
+                      {(v.agreement_tier || 'PENDING_REVIEW').replace(/_/g, ' ')}
                     </span>
                   </div>
 
                   <div className="text-[10px] text-ink-muted font-mono uppercase tracking-wider flex items-center gap-2">
                     <span>{v.bank_name || 'Unknown Bank'}</span>
                     <span>•</span>
-                    <span className="text-accent font-semibold">{v.role_label} ({v.tier_label})</span>
+                    <span className="text-accent font-semibold">{v.role_label || 'Unassigned'} ({v.tier_label || 'Pending'})</span>
                   </div>
                 </div>
 
@@ -126,10 +303,10 @@ export default function VerdictsPanel({ caseId }) {
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <div className="text-[10px] text-ink-muted font-bold uppercase tracking-wider">Composite Score</div>
-                    <div className="text-xs text-ink-secondary font-medium">Algo Verdict: <span className="font-bold text-ink-primary">{v.algo_verdict}</span></div>
+                    <div className="text-xs text-ink-secondary font-medium">Algo Verdict: <span className="font-bold text-ink-primary">{v.algo_verdict || 'N/A'}</span></div>
                   </div>
-                  <div className="flex items-center justify-center w-14 h-14 rounded-full bg-accent text-accent-fg font-semibold text-lg relative">
-                    {v.composite_score}
+                  <div className="flex items-center justify-center w-14 h-14 rounded-full bg-accent text-accent-fg font-semibold text-lg relative shadow-sm">
+                    {v.composite_score ?? 0}
                     <div className="absolute inset-0.5 rounded-full border border-white/20"></div>
                   </div>
                 </div>
@@ -242,7 +419,20 @@ export default function VerdictsPanel({ caseId }) {
           );
         })}
 
+        {/* Empty filter results state */}
+        {verdicts.length > 0 && filteredVerdicts.length === 0 && (
+          <div className="text-center py-12 border border-dashed border-border rounded-xl bg-surface-sunken/40 space-y-3">
+            <p className="text-xs text-ink-muted">No suspect profiles match your search or filter criteria.</p>
+            <button
+              onClick={() => { setSearchQuery(''); setTierFilter('ALL'); }}
+              className="text-xs bg-surface-raised border border-border hover:bg-surface-sunken text-accent font-semibold px-3 py-1.5 rounded-md transition-colors"
+            >
+              Clear Filters
+            </button>
+          </div>
+        )}
 
+        {/* Global empty state */}
         {verdicts.length === 0 && (
           <div className="text-center py-12 border border-dashed border-border rounded-lg bg-surface-sunken/40">
             <span className="text-xs text-ink-muted">No account verdicts available. Please trigger an analysis first.</span>
