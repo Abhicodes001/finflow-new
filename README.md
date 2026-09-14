@@ -420,6 +420,5 @@ curl -sk -X POST https://localhost:3000/auth/login \
 | Neo4j | 7687 (bolt), 7474 (HTTP) | Not exposed |
 | Redis | 6379 | Not exposed |
 
----
 
 *Built for Karnataka CID EOW — Internal use only. Not for public distribution.*
