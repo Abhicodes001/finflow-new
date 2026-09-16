@@ -166,9 +166,9 @@ If you prefer to configure every component manually, follow these steps:
 | ICICI | ✅ Yes | Dynamic Generic Pipeline |
 | PNB | ✅ Yes | Dynamic Generic Pipeline |
 | Canara | ✅ Yes | Dynamic Generic Pipeline |
-| Union Bank | ✅ Yes | Dynamic Generic Pipeline |
-| Yes Bank | ✅ Yes | Dynamic Generic Pipeline |
-| **Any Other Bank** | ✅ Yes | Dynamic Generic Pipeline |
+| Union Bank |  Yes | Dynamic Generic Pipeline |
+| Yes Bank | Yes | Dynamic Generic Pipeline |
+| **Any Other Bank** |  Yes | Dynamic Generic Pipeline |
 
 ### The Dynamic Generic Statement Parser
 For non-standard banks or files where specialized parsing fails, the system automatically falls back to our **Layout-Aware Generic Parser**.
